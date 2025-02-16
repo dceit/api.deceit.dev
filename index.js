@@ -11,23 +11,42 @@ const pool = mariadb.createPool({
 });
 
 function respond(req, res, next) {
-  res.send({ hello: req.params.name });
+  res.send("pong");
   next();
 }
 
 async function osuGetChatEntries(req, res) {
-  const { username, keywords, offset = 0 } = req.query;
+  const { username, channel, keywords, offset = 0, limit = 20 } = req.query;
 
   let conn;
   try {
     conn = await pool.getConnection();
-    const query = "SELECT * FROM chat";
-    const rows = await conn.query(query);
+
+    let query = "SELECT * FROM chat WHERE 1=1";
+    const params = [];
+
+    if (username) {
+      query += " AND username = ?";
+      params.push(username);
+    }
+    if (channel) {
+      query += " AND channel = ?";
+      params.push(channel);
+    }
+    if (keywords) {
+      query += " AND message LIKE ?";
+      params.push(`%${keywords}%`);
+    }
+
+    query += " ORDER BY time DESC LIMIT ? OFFSET ?";
+    params.push(parseInt(limit, 10), parseInt(offset, 10));
+
+    const rows = await conn.query(query, params);
 
     res.send(rows);
   } catch (err) {
     console.error(err);
-    res.send(500, { error: "Database error" });
+    res.status(500).send({ error: "Database error" });
   } finally {
     if (conn) conn.release();
   }
@@ -37,8 +56,7 @@ const server = restify.createServer();
 
 server.use(restify.plugins.queryParser());
 
-server.get("/hello/:name", respond);
-server.head("/hello/:name", respond);
+server.get("/ping", respond);
 server.get("/api/osu/chat", osuGetChatEntries);
 
 server.listen(8080, function () {
