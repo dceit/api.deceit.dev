@@ -1,5 +1,6 @@
 const restify = require("restify");
 const mariadb = require("mariadb");
+const { LegacyClient } = require("osu-web.js");
 require("dotenv").config();
 
 const pool = mariadb.createPool({
@@ -13,6 +14,47 @@ const pool = mariadb.createPool({
 function respond(req, res, next) {
   res.send("pong");
   next();
+}
+
+async function osuGetUserID(req, res) {
+  const legacyApi = new LegacyClient(process.env.OSU_LEGACY_API_KEY);
+  const { user } = req.params;
+
+  if (user == undefined || user == null || typeof user !== "string") {
+    return res.send();
+  }
+
+  await legacyApi
+    .getUser({
+      u: user,
+    })
+    .then((response) => {
+      return res.send(response);
+    });
+}
+
+async function osuGetUserIDImage(req, res) {
+  const legacyApi = new LegacyClient(process.env.OSU_LEGACY_API_KEY);
+  const { user } = req.params;
+
+  if (user == undefined || user == null || typeof user !== "string") {
+    return res.send();
+  }
+
+  await legacyApi
+    .getUser({
+      u: user,
+    })
+    .then((response) => {
+      if (response == null) {
+        return res.redirect(`https://a.ppy.sh/3?1337.jpeg`, () => {});
+      }
+
+      return res.redirect(
+        `https://a.ppy.sh/${response.user_id}?1337.jpeg`,
+        () => {},
+      );
+    });
 }
 
 async function osuGetChatEntries(req, res) {
@@ -63,6 +105,8 @@ server.use(function crossOrigin(req, res, next) {
 
 server.get("/ping", respond);
 server.get("/api/osu/chat", osuGetChatEntries);
+server.get("/api/osu/user/:user", osuGetUserID);
+server.get("/api/osu/image/:user", osuGetUserIDImage);
 
 server.listen(8080, function () {
   console.log("%s listening at %s", server.name, server.url);
